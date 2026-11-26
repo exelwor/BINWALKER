@@ -1,0 +1,11 @@
+services:
+  binwalker:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - binwalker-data:/data
+    restart: unless-stopped
+
+volumes:
+  binwalker-data:

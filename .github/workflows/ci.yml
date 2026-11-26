@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: ruff check .
+      - run: pytest -q
+      - name: Analyze built-in sample binary
+        run: |
+          binwalker sample --name elf64-beacon -o sample.elf
+          binwalker analyze sample.elf -o report.html --md report.md
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: sample-report
+          path: |
+            report.html
+            report.md
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t binwalker .
+      - name: Smoke test the container
+        run: |
+          docker run -d --name bw -p 8000:8000 binwalker
+          for i in $(seq 1 20); do curl -fs localhost:8000/api/health && break || sleep 1; done
+          curl -fs -X POST localhost:8000/api/samples/elf64-beacon/analyze | grep -q '"sections"'
